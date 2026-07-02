@@ -1,69 +1,88 @@
 # Network Anomaly Detection
 
-A multi-class network traffic classifier that detects five types of network behaviour — Normal, DoS Attack, Port Scan, Brute Force, and Data Exfiltration — using an ensemble ML model. Served via a branded Flask web app.
+Multi-class network traffic classifier that detects five traffic types — Normal, DoS Attack, Port Scan, Brute Force, and Data Exfiltration — using a soft-voting ensemble of Random Forest and Extra Trees classifiers, served via a Flask web app.
 
-## What It Does
+## Results
 
-- Accepts network flow parameters (bytes, packets, ports, protocol, TCP flags, TTL, etc.)
-- Classifies the traffic into one of five categories
-- Returns confidence scores for each class, severity level, and a recommended security action
+| Metric | Score |
+|---|---|
+| Train Accuracy | 100% |
+| Test Accuracy | 100% |
+| CV Accuracy (5-fold) | 1.000 ± 0.000 |
+
+> Scores reflect performance on synthetic data with well-separated class distributions per attack type. For production use, replace `train.py`'s generator with real capture data such as [CIC-IDS2017](https://www.unb.ca/cic/datasets/ids-2017.html) or [NSL-KDD](https://www.unb.ca/cic/datasets/nsl.html).
 
 ## Detection Classes
 
-| Class | Description |
-|---|---|
-| Normal | Legitimate network traffic |
-| DoS Attack | High-volume flood targeting a service |
-| Port Scan | Sequential scanning of ports to find open services |
-| Brute Force | Repeated authentication attempts against SSH/RDP/FTP |
-| Data Exfiltration | Large outbound data transfer to external hosts |
+| Class | Description | Severity |
+|---|---|---|
+| Normal | Legitimate traffic | None |
+| Port Scan | Sequential port probing | Medium |
+| Brute Force | Repeated auth attempts on SSH/RDP/FTP | High |
+| DoS Attack | High-volume SYN/UDP flood | Critical |
+| Data Exfiltration | Large outbound transfer to external hosts | Critical |
+
+## How It Works
+
+1. Network flow parameters are submitted (bytes, packets, ports, protocol, TCP flags, TTL, IAT)
+2. Eight features are engineered from raw inputs (see below)
+3. Random Forest + Extra Trees ensemble classifies the traffic type
+4. The app returns per-class probabilities, severity level, and a recommended action
 
 ## Tech Stack
 
 Python · scikit-learn · Flask · NumPy · Pandas
 
+## Model Details
+
+**Algorithm:** Soft-voting ensemble — `RandomForestClassifier` (weight 2) + `ExtraTreesClassifier` (weight 1)
+
+**Raw features (15):** `duration`, `bytes_sent`, `bytes_recv`, `packets_sent`, `packets_recv`, `src_port`, `dst_port`, `protocol`, `unique_ips`, `failed_logins`, `syn_count`, `fin_count`, `rst_count`, `ttl_mean`, `flow_iat_mean`
+
+**Engineered features (8):**
+
+| Feature | Formula | Captures |
+|---|---|---|
+| `bytes_ratio` | `log(bytes_recv) / log(bytes_sent)` | Exfiltration asymmetry |
+| `packet_ratio` | `packets_recv / packets_sent` | Traffic directionality |
+| `bytes_per_pkt` | `log(total_bytes) / total_packets` | Packet size patterns |
+| `syn_rst_ratio` | `syn_count / (rst_count + 1)` | SYN flood indicator |
+| `is_well_known_dst` | `dst_port < 1024` | Targeting common services |
+| `is_encrypted` | `dst_port in [443, 8443, 993, 995]` | Encrypted channel use |
+| `duration_log` | `log1p(duration)` | Normalise skewed duration |
+| `flow_iat_log` | `log1p(flow_iat_mean)` | Normalise inter-arrival time |
+
 ## Project Structure
 
 ```
 network-anomaly-detection/
-├── train.py          # Traffic generation + model training
-├── app.py            # Flask web application
+├── train.py              # Traffic generation + model training
+├── app.py                # Flask web app + /predict endpoint
 ├── templates/
-│   └── index.html    # Branded UI with per-class probability bars
-├── models/           # Saved model artifacts (generated at runtime)
-├── data/             # Generated dataset (generated at runtime)
+│   └── index.html        # Kunal's Lab branded UI with probability bars
+├── models/               # Saved artifacts (populated after training)
+│   ├── anomaly_model.joblib
+│   ├── scaler.joblib
+│   ├── label_encoder.joblib
+│   └── metadata.json
+├── data/                 # Generated CSV (populated after training)
 └── requirements.txt
 ```
 
-## Installation
+## Quick Start
 
 ```bash
 git clone https://github.com/kanenites/network-anomaly-detection.git
 cd network-anomaly-detection
 pip install -r requirements.txt
-```
 
-## Usage
-
-**Step 1 — Train the model:**
-```bash
+# Train
 python train.py
-```
-Generates 60,000 synthetic network flows across 5 classes, trains a Random Forest + Extra Trees ensemble, and saves the model to `models/`.
 
-**Step 2 — Run the web app:**
-```bash
+# Serve
 python app.py
+# → http://localhost:5002
 ```
-Open `http://localhost:5002` and enter network flow parameters to classify the traffic.
-
-## Model Details
-
-- **Algorithm:** Soft-voting ensemble (Random Forest + Extra Trees)
-- **Features:** Duration, bytes sent/recv, packet counts, ports, protocol, TCP flags (SYN/FIN/RST), TTL, IAT, and engineered ratios (bytes ratio, packet ratio, SYN-RST ratio)
-- **Engineered features:** `bytes_ratio`, `packet_ratio`, `bytes_per_pkt`, `syn_rst_ratio`, `is_well_known_dst`, `is_encrypted`, `duration_log`, `flow_iat_log`
-
-> **Note:** Trained on synthetic data for demonstration purposes. For production use, replace with real network capture data (e.g. CIC-IDS2017 or NSL-KDD datasets).
 
 ---
-*Kunal's Lab · AI & ML Systems · For research and educational purposes only.*
+*Kunal's Lab · AI & ML Systems*
