@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Network Anomaly Detection — Kunal's Lab</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --kl-bg: #0A0F1E; --kl-bg-card: #161D2F; --kl-border: #1E2A40;
+    --kl-cyan: #00D4FF; --kl-cyan-dim: #00A8CC; --kl-cyan-glow: rgba(0,212,255,0.15);
+    --kl-cyan-subtle: rgba(0,212,255,0.06); --kl-text: #F0F6FF; --kl-muted: #8B9BB4;
+    --kl-font: 'Space Grotesk', sans-serif; --kl-mono: 'JetBrains Mono', monospace;
+    --green: #6BCB77; --orange: #FFB347; --red: #FF6B6B; --purple: #A78BFA;
+  }
+  html, body { height: 100%; }
+  body { background: var(--kl-bg); color: var(--kl-text); font-family: var(--kl-font); min-height: 100vh; display: flex; flex-direction: column; overflow-x: hidden; }
+  #bg-canvas { position: fixed; inset: 0; z-index: 0; pointer-events: none; }
+  .bg-orb { position: fixed; border-radius: 50%; filter: blur(90px); pointer-events: none; z-index: 0; animation: orb-drift 20s ease-in-out infinite alternate; }
+  .bg-orb-1 { width: 500px; height: 500px; background: radial-gradient(circle, rgba(0,212,255,0.07) 0%, transparent 70%); top: -100px; right: -80px; }
+  .bg-orb-2 { width: 380px; height: 380px; background: radial-gradient(circle, rgba(167,139,250,0.05) 0%, transparent 70%); bottom: 5%; left: -60px; animation-delay: -7s; }
+  @keyframes orb-drift { 0%{transform:translate(0,0)} 50%{transform:translate(-25px,18px)} 100%{transform:translate(15px,-25px)} }
+  nav { position: relative; z-index: 1; padding: 16px 32px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--kl-border); background: rgba(10,15,30,0.85); backdrop-filter: blur(12px); }
+  .nav-brand { display: flex; align-items: center; gap: 10px; text-decoration: none; }
+  .nav-logo { width: 32px; height: 32px; }
+  .nav-name { font-size: 16px; font-weight: 700; color: var(--kl-text); }
+  .nav-name span { color: var(--kl-cyan); }
+  .nav-badge { font-family: var(--kl-mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--kl-cyan); background: var(--kl-cyan-glow); border: 1px solid rgba(0,212,255,0.25); padding: 3px 8px; border-radius: 4px; }
+  main { position: relative; z-index: 1; flex: 1; display: flex; align-items: flex-start; justify-content: center; padding: 40px 24px; gap: 24px; flex-wrap: wrap; }
+  .card { background: var(--kl-bg-card); border: 1px solid var(--kl-border); border-radius: 20px; overflow: hidden; position: relative; }
+  .card::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px; background: linear-gradient(90deg, var(--kl-cyan), var(--kl-cyan-dim), transparent); }
+  .form-card { width: 100%; max-width: 500px; }
+  .result-card { width: 100%; max-width: 360px; }
+  .card-header { padding: 28px 28px 0; }
+  .card-label { font-family: var(--kl-mono); font-size: 10px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--kl-cyan); margin-bottom: 8px; display: flex; align-items: center; gap: 8px; }
+  .card-label::before { content: ''; width: 18px; height: 1px; background: var(--kl-cyan); opacity: 0.5; }
+  .card-title { font-size: 22px; font-weight: 700; letter-spacing: -0.5px; margin-bottom: 4px; }
+  .card-sub { font-size: 12px; color: var(--kl-muted); line-height: 1.5; }
+  .card-body { padding: 22px 28px 28px; }
+  .field-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 11px; margin-bottom: 14px; }
+  .field { display: flex; flex-direction: column; gap: 5px; }
+  label { font-family: var(--kl-mono); font-size: 9.5px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--kl-muted); }
+  input, select { background: var(--kl-bg); border: 1px solid var(--kl-border); border-radius: 7px; padding: 8px 11px; font-family: var(--kl-font); font-size: 13px; color: var(--kl-text); width: 100%; outline: none; transition: border-color 0.2s, box-shadow 0.2s; }
+  input:focus, select:focus { border-color: var(--kl-cyan); box-shadow: 0 0 0 3px var(--kl-cyan-glow); }
+  select option { background: var(--kl-bg-card); }
+  .btn-primary { width: 100%; background: var(--kl-cyan); color: var(--kl-bg); font-family: var(--kl-font); font-size: 14px; font-weight: 600; padding: 13px 20px; border-radius: 10px; border: none; cursor: pointer; transition: box-shadow 0.2s, transform 0.15s; display: flex; align-items: center; justify-content: center; gap: 8px; }
+  .btn-primary:hover { box-shadow: 0 0 24px rgba(0,212,255,0.4); transform: translateY(-1px); }
+  /* Result */
+  .result-placeholder { padding: 40px 28px; text-align: center; }
+  .result-placeholder-icon { font-size: 36px; margin-bottom: 12px; opacity: 0.4; }
+  .result-placeholder-text { font-family: var(--kl-mono); font-size: 11px; color: var(--kl-muted); }
+  .result-body { padding: 24px 28px 28px; display: none; }
+  .prediction-label { font-family: var(--kl-mono); font-size: 10px; color: var(--kl-muted); text-transform: uppercase; letter-spacing: 0.15em; margin-bottom: 8px; }
+  .prediction-value { font-size: 24px; font-weight: 700; margin-bottom: 14px; }
+  .sev-none     { color: var(--green); }
+  .sev-medium   { color: var(--orange); }
+  .sev-high     { color: var(--red); }
+  .sev-critical { color: var(--red); text-shadow: 0 0 12px rgba(255,107,107,0.4); }
+  .confidence-row { display: flex; justify-content: space-between; font-family: var(--kl-mono); font-size: 11px; color: var(--kl-muted); margin-bottom: 16px; }
+  .confidence-row span:last-child { color: var(--kl-cyan); font-weight: 700; }
+  /* Class probability bars */
+  .prob-section { margin-bottom: 16px; }
+  .prob-section-label { font-family: var(--kl-mono); font-size: 9.5px; color: var(--kl-muted); text-transform: uppercase; letter-spacing: 0.12em; margin-bottom: 10px; }
+  .prob-item { margin-bottom: 8px; }
+  .prob-item-header { display: flex; justify-content: space-between; font-family: var(--kl-mono); font-size: 10px; margin-bottom: 3px; }
+  .prob-item-name { color: var(--kl-muted); }
+  .prob-item-pct  { color: var(--kl-text); }
+  .mini-bar { height: 4px; background: var(--kl-border); border-radius: 2px; overflow: hidden; }
+  .mini-fill { height: 100%; border-radius: 2px; transition: width 0.7s ease; background: var(--kl-cyan); }
+  .mini-fill.active { background: var(--kl-cyan); box-shadow: 0 0 6px var(--kl-cyan-glow); }
+  .action-box { background: var(--kl-bg); border: 1px solid var(--kl-border); border-radius: 8px; padding: 12px 14px; font-size: 12px; color: var(--kl-muted); line-height: 1.6; }
+  .action-box.sev-critical, .action-box.sev-high { border-color: rgba(255,107,107,0.3); color: var(--red); }
+  .action-box.sev-medium { border-color: rgba(255,179,71,0.3); color: var(--orange); }
+  .action-box.sev-none { border-color: rgba(107,203,119,0.3); color: var(--green); }
+  footer { position: relative; z-index: 1; padding: 16px 32px; border-top: 1px solid var(--kl-border); text-align: center; font-family: var(--kl-mono); font-size: 10px; color: var(--kl-muted); opacity: 0.6; }
+</style>
+</head>
+<body>
+<canvas id="bg-canvas"></canvas>
+<div class="bg-orb bg-orb-1"></div>
+<div class="bg-orb bg-orb-2"></div>
+
+<nav>
+  <a class="nav-brand" href="/">
+    <svg class="nav-logo" viewBox="0 0 52 52" fill="none">
+      <path d="M26 3 L47 14.5 L47 37.5 L26 49 L5 37.5 L5 14.5 Z" stroke="#00D4FF" stroke-width="1.5" fill="none" opacity="0.4"/>
+      <path d="M26 11 L39 18.5 L39 33.5 L26 41 L13 33.5 L13 18.5 Z" fill="rgba(0,212,255,0.08)" stroke="#00D4FF" stroke-width="1" opacity="0.7"/>
+      <path d="M22 16 L22 24 L17 34 Q16 36 18 37 L34 37 Q36 36 35 34 L30 24 L30 16 Z" fill="rgba(0,212,255,0.12)" stroke="#00D4FF" stroke-width="1.2"/>
+      <line x1="21" y1="18" x2="31" y2="18" stroke="#00D4FF" stroke-width="1.2"/>
+      <circle cx="22" cy="31" r="1.5" fill="#00D4FF" opacity="0.9"/>
+      <circle cx="27" cy="33.5" r="1" fill="#00D4FF" opacity="0.7"/>
+      <circle cx="30" cy="29" r="1.2" fill="#00D4FF" opacity="0.6"/>
+    </svg>
+    <span class="nav-name">Kunal's <span>Lab</span></span>
+  </a>
+  <span class="nav-badge">Anomaly Detection</span>
+</nav>
+
+<main>
+  <!-- Input Form -->
+  <div class="card form-card">
+    <div class="card-header">
+      <div class="card-label">AI · Network Security</div>
+      <div class="card-title">Traffic Classifier</div>
+      <div class="card-sub">Enter network flow parameters to classify traffic as Normal, DoS, Port Scan, Brute Force, or Data Exfiltration.</div>
+    </div>
+    <div class="card-body">
+      <div class="field-grid">
+        <div class="field">
+          <label>Duration (sec)</label>
+          <input type="number" id="duration" value="30" min="0" step="0.1">
+        </div>
+        <div class="field">
+          <label>Protocol</label>
+          <select id="protocol">
+            <option value="6" selected>TCP (6)</option>
+            <option value="17">UDP (17)</option>
+            <option value="1">ICMP (1)</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Bytes Sent</label>
+          <input type="number" id="bytes_sent" value="5000" min="0">
+        </div>
+        <div class="field">
+          <label>Bytes Received</label>
+          <input type="number" id="bytes_recv" value="8000" min="0">
+        </div>
+        <div class="field">
+          <label>Packets Sent</label>
+          <input type="number" id="packets_sent" value="50" min="0">
+        </div>
+        <div class="field">
+          <label>Packets Received</label>
+          <input type="number" id="packets_recv" value="60" min="0">
+        </div>
+        <div class="field">
+          <label>Source Port</label>
+          <input type="number" id="src_port" value="54321" min="1" max="65535">
+        </div>
+        <div class="field">
+          <label>Destination Port</label>
+          <input type="number" id="dst_port" value="443" min="1" max="65535">
+        </div>
+        <div class="field">
+          <label>Unique IPs</label>
+          <input type="number" id="unique_ips" value="2" min="1">
+        </div>
+        <div class="field">
+          <label>Failed Logins</label>
+          <input type="number" id="failed_logins" value="0" min="0">
+        </div>
+        <div class="field">
+          <label>SYN Count</label>
+          <input type="number" id="syn_count" value="3" min="0">
+        </div>
+        <div class="field">
+          <label>FIN Count</label>
+          <input type="number" id="fin_count" value="3" min="0">
+        </div>
+        <div class="field">
+          <label>RST Count</label>
+          <input type="number" id="rst_count" value="1" min="0">
+        </div>
+        <div class="field">
+          <label>Mean TTL</label>
+          <input type="number" id="ttl_mean" value="64" min="1" max="255">
+        </div>
+        <div class="field">
+          <label>Flow IAT Mean (sec)</label>
+          <input type="number" id="flow_iat_mean" value="0.5" min="0" step="0.001">
+        </div>
+      </div>
+      <button class="btn-primary" onclick="classify()">
+        <svg width="15" height="15" viewBox="0 0 16 16" fill="none"><path d="M1 8h14M8 1v14" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" opacity="0.5"/><circle cx="8" cy="8" r="6" stroke="currentColor" stroke-width="1.4"/></svg>
+        Classify Traffic
+      </button>
+    </div>
+  </div>
+
+  <!-- Result Panel -->
+  <div class="card result-card">
+    <div class="card-header">
+      <div class="card-label">Classification Result</div>
+      <div class="card-title">Analysis</div>
+    </div>
+    <div class="result-placeholder" id="placeholder">
+      <div class="result-placeholder-icon">📡</div>
+      <div class="result-placeholder-text">Submit traffic parameters<br>to classify the flow</div>
+    </div>
+    <div class="result-body" id="resultBody">
+      <div class="prediction-label">Detected Traffic Type</div>
+      <div class="prediction-value" id="predValue"></div>
+      <div class="confidence-row">
+        <span>Model Confidence</span>
+        <span id="confValue"></span>
+      </div>
+      <div class="prob-section">
+        <div class="prob-section-label">Class Probabilities</div>
+        <div id="probBars"></div>
+      </div>
+      <div class="action-box" id="actionBox"></div>
+    </div>
+  </div>
+</main>
+
+<footer>Kunal's Lab · AI &amp; ML Systems · For research and educational purposes only</footer>
+
+<script>
+const canvas = document.getElementById('bg-canvas'), ctx = canvas.getContext('2d');
+function resize() { canvas.width = window.innerWidth; canvas.height = window.innerHeight; }
+resize(); window.addEventListener('resize', resize);
+const nodes = Array.from({length:50},()=>({x:Math.random()*window.innerWidth,y:Math.random()*window.innerHeight,vx:(Math.random()-.5)*.2,vy:(Math.random()-.5)*.2,r:Math.random()*1.4+.6}));
+function drawBg(){ctx.clearRect(0,0,canvas.width,canvas.height);for(const n of nodes){n.x+=n.vx;n.y+=n.vy;if(n.x<0||n.x>canvas.width)n.vx*=-1;if(n.y<0||n.y>canvas.height)n.vy*=-1;}for(let i=0;i<nodes.length;i++)for(let j=i+1;j<nodes.length;j++){const dx=nodes[i].x-nodes[j].x,dy=nodes[i].y-nodes[j].y,d=Math.sqrt(dx*dx+dy*dy);if(d<155){ctx.beginPath();ctx.strokeStyle=`rgba(0,212,255,${(1-d/155)*.13})`;ctx.lineWidth=.5;ctx.moveTo(nodes[i].x,nodes[i].y);ctx.lineTo(nodes[j].x,nodes[j].y);ctx.stroke();}}for(const n of nodes){ctx.beginPath();ctx.arc(n.x,n.y,n.r,0,Math.PI*2);ctx.fillStyle='rgba(0,212,255,.25)';ctx.fill();}requestAnimationFrame(drawBg);}
+drawBg();
+
+const ids = ['duration','protocol','bytes_sent','bytes_recv','packets_sent','packets_recv','src_port','dst_port','unique_ips','failed_logins','syn_count','fin_count','rst_count','ttl_mean','flow_iat_mean'];
+
+async function classify() {
+  const body = new URLSearchParams();
+  ids.forEach(id => body.append(id, document.getElementById(id).value));
+
+  const res  = await fetch('/predict', { method: 'POST', body });
+  const data = await res.json();
+  if (data.error) { alert(data.error); return; }
+
+  document.getElementById('placeholder').style.display = 'none';
+  const rb = document.getElementById('resultBody');
+  rb.style.display = 'block';
+
+  const pv = document.getElementById('predValue');
+  pv.textContent = data.prediction;
+  pv.className   = 'prediction-value sev-' + data.severity;
+
+  document.getElementById('confValue').textContent = data.confidence + '%';
+
+  // Probability bars
+  const container = document.getElementById('probBars');
+  container.innerHTML = '';
+  const probs = data.class_probs;
+  Object.entries(probs).sort((a,b) => b[1]-a[1]).forEach(([cls, pct]) => {
+    const isActive = cls === data.prediction;
+    container.innerHTML += `
+      <div class="prob-item">
+        <div class="prob-item-header">
+          <span class="prob-item-name">${cls}</span>
+          <span class="prob-item-pct">${pct}%</span>
+        </div>
+        <div class="mini-bar">
+          <div class="mini-fill ${isActive ? 'active' : ''}" style="width:${pct}%"></div>
+        </div>
+      </div>`;
+  });
+
+  const ab = document.getElementById('actionBox');
+  ab.textContent = data.action;
+  ab.className   = 'action-box sev-' + data.severity;
+}
+</script>
+</body>
+</html>
