@@ -22,7 +22,18 @@ Multi-class network traffic classifier that detects five traffic types — Norma
 | DoS Attack | High-volume SYN/UDP flood | Critical |
 | Data Exfiltration | Large outbound transfer to external hosts | Critical |
 
-## How It Works
+## Intended Audience
+
+This tool is designed for **network security engineers and SOC analysts**, not end users. The input parameters (SYN/FIN/RST counts, Flow IAT, TTL) are not values a typical user would know — they come from network monitoring tools such as:
+
+- **Wireshark / tshark** — packet capture and flow analysis
+- **tcpdump** — command-line packet analyser
+- **CICFlowMeter** — generates flow-level features from PCAPs
+- **SIEM platforms** (Splunk, Elastic SIEM) — aggregate these metrics automatically
+
+In a production deployment, this model would sit behind an automated pipeline that extracts these features from live traffic and calls the `/predict` endpoint directly — no manual input required.
+
+
 
 1. Network flow parameters are submitted (bytes, packets, ports, protocol, TCP flags, TTL, IAT)
 2. Eight features are engineered from raw inputs (see below)
